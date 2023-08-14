@@ -5,7 +5,6 @@ const axios = require('axios');
 const app = express();
 const port = 3000;
 
-// Your existing endpoints...
 app.post('/receiveData', express.json(), async (req, res) => {
   const data = req.body;
   const uri = process.env.MONGO_URI;
@@ -29,25 +28,51 @@ app.post('/receiveData', express.json(), async (req, res) => {
 });
 
 
-app.get('/viewData', async (req, res) => { // <-- 'async' keyword is here
+function organiseData(pomodoros) {
+  return pomodoros.reduce((acc, item) => {
+    // Check if the project already exists in the accumulator
+    if (!acc[item.project]) {
+      acc[item.project] = [];
+    }
+
+    // Push the task into the appropriate project array
+    acc[item.project].push({
+      round: item.round,
+      type: item.type,
+      task: item.task,
+      session_start: new Date(item.session_start).toLocaleString(), // Converted to human-readable format
+      session_end: item.session_end ? new Date(item.session_end).toLocaleString() : null, // Converted if not null
+      seconds: item.seconds,
+    });
+
+    return acc;
+  }, {});
+}
+
+
+app.get('/viewData', async (req, res) => {
   const uri = process.env.MONGO_URI;
-  console.log(uri);
   const client = new MongoClient(uri, { useNewUrlParser: true, useUnifiedTopology: true });
 
   try {
-    await client.connect(); // <-- 'await' keyword is inside async function
+    await client.connect();
 
     const collection = client.db("pomodoroDB").collection("pomodoroData");
 
-    const documents = await collection.find({}).toArray();
+    const pomodoros = await collection.find({}).toArray();
+
+    const projects = organiseData(pomodoros);
+
 
     let data = '';
+    console.log(pomodoros); // Log data to console
+    console.log(projects); // Log project data
 
-    for (let document of documents) {
-      data += `<p>${JSON.stringify(document)}</p>`;
+    for (let pomodoro of pomodoros) {
+      data += `<p>${JSON.stringify(pomodoro)}</p>`; // Collect the data to a string
     }
 
-    res.status(200).send(`<h1>Data from MongoDB</h1>${data}`);
+    res.status(200).send(`<h1>Data from MongoDB</h1>${data}`); // Render the data
   } catch (err) {
     console.error(err);
     res.status(500).send('Error retrieving data.');
