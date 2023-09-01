@@ -80,12 +80,25 @@ app.get('/viewData', async (req, res) => {
   }
 });
 
-/// Goals
-const checkGoalConsistency = async (newGoal, existingGoals) => (
-  existingGoals.some((existingGoal) => (newGoal.startDate < existingGoal.end_date && existingGoal.startDate < newGoal.end_date))
-)
+const checkGoalConsistency = async (newGoal, existingGoals) => {
+  console.log(existingGoals)
+  console.log(newGoal)
+
+  const newGoalStartDate = new Date(newGoal.startDate);
+  const newGoalEndDate = new Date(newGoal.end_date);
+
+  return existingGoals.some((existingGoal) => {
+    const newStart = new Date(newGoal.startDate);
+    const newEnd = new Date(newGoal.end_date);
+    const existingStart = new Date(existingGoal.startDate);
+    const existingEnd = new Date(existingGoal.end_date);
+
+    return newStart < existingEnd && existingStart < newEnd;
+});
+}
 
 app.post('/updateGoal', express.json(), async (req, res) => {
+  console.log("Inside /updateGoal endpoint");
   const goalData = req.body;
   const collection = client.db("pomodoroDB").collection("goalData");
 
@@ -94,8 +107,12 @@ app.post('/updateGoal', express.json(), async (req, res) => {
   if (!goalData.startDate || !goalData.end_date) {
     res.status(400).json({ message: 'Invalid data: startDate and endDate are required.' });
     return;
-  }  
+  }
 
+  // Convert strings to Date objects
+  goalData.startDate = new Date(goalData.startDate).toISOString();
+  goalData.end_date = new Date(goalData.end_date).toISOString();
+  
   const isConsistent = await checkGoalConsistency(goalData, existingGoals);
   if (!isConsistent) {
     res.status(400).json({ message: 'The goal overlaps with an existing goal.' });
