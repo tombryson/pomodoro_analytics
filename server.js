@@ -17,7 +17,7 @@ client.connect().then(() => {
   process.exit(1);
 });
 
-app.use(cors()); // Enables all CORS requests
+app.use(cors());
 
 app.post('/receiveData', express.json(), async (req, res) => {
   const data = req.body;
@@ -71,11 +71,7 @@ app.get('/viewData', async (req, res) => {
 
     let data = '';
 
-    res.status(200).json(projects); // Send the data back if requested
-    // for (let pomodoro of pomodoros) {
-    //   data += `<p>${JSON.stringify(pomodoro)}</p>`; // Collect the data to a string
-    // }
-    // res.status(200).send(`<h1>Data from MongoDB</h1>${data}`); // Render the data
+    res.status(200).json(projects);
   } catch (err) {
     console.error(err);
     res.status(500).send('Error retrieving data.');
@@ -84,7 +80,56 @@ app.get('/viewData', async (req, res) => {
   }
 });
 
+/// Goals
+const checkGoalConsistency = async (newGoal, existingGoals) => (
+  existingGoals.some((existingGoal) => (newGoal.startDate < existingGoal.end_date && existingGoal.startDate < newGoal.end_date))
+)
 
+app.post('/updateGoal', express.json(), async (req, res) => {
+  const goalData = req.body;
+  const collection = client.db("pomodoroDB").collection("goalData");
+
+  const existingGoals = await collection.find({}).toArray();
+
+  if (!goalData.startDate || !goalData.end_date) {
+    res.status(400).json({ message: 'Invalid data: startDate and endDate are required.' });
+    return;
+  }  
+
+  const isConsistent = await checkGoalConsistency(goalData, existingGoals);
+  if (!isConsistent) {
+    res.status(400).json({ message: 'The goal overlaps with an existing goal.' });
+    return;
+  }
+
+  try {
+    const existingGoal = await collection.findOne({ project: goalData.project });
+
+    if (existingGoal) {
+      await collection.updateOne({ project: goalData.project }, { $set: goalData });
+    } else {
+      await collection.insertOne(goalData);
+    }
+    res.status(200).json({ message: 'Goal updated successfully.' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Error processing request.');
+  }
+});
+
+app.get('/getGoals', async (req, res) => {
+  const collection = client.db("pomodoroDB").collection("goalData");
+
+  try {
+    const goals = await collection.find({}).toArray();
+    res.status(200).json(goals);
+  } catch(err) {
+    console.error(err);
+    res.status(500).send("error receiving data.");
+  }
+})
+
+/// Homepage
 app.get('/', (req, res) => {
   res.send(`
     <h1>Welcome to Pomodoro Analytics</h1>
